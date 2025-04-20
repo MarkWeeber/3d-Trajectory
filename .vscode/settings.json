@@ -1,0 +1,5 @@
+{
+    "dotnet.preferCSharpExtension": true,
+    "dotnet.defaultSolution": "3D Trajectory.sln",
+    "git.ignoreLimitWarning": true
+}
