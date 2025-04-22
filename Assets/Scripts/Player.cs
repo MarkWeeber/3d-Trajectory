@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.EventSystems;
 
 /// <summary>
 /// A simple Player class
@@ -16,6 +15,8 @@ public class Player : MonoBehaviour
     private Vector2 _lookInput;
     private Vector3 _moveDirection;
     private InputSystem _inputSystem;
+    private float _xRotation;
+    private bool _omitFirstFrame = true;
 
     private void Start()
     {
@@ -30,19 +31,26 @@ public class Player : MonoBehaviour
 
     private void ManageLook()
     {
+        // omit first frame to avoid jitter
+        if (_omitFirstFrame)
+        {
+            _omitFirstFrame = false;
+            return;
+        }
         // get look input
         _lookInput = _inputSystem.Player.Look.ReadValue<Vector2>();
         // rotate whole body around y axis
         transform.Rotate(transform.up, _lookInput.x * Time.deltaTime * _verticalLookSpeed);
-        // rotate view trasnform around x axis
-        _viewTransform.Rotate(-_lookInput.y * Time.deltaTime * _horizontalLookSpeed, 0, 0);
-        // clapm rotation to prevent flipping
-        _viewTransform.localEulerAngles = new Vector3(
-            Mathf.Clamp(_viewTransform.localEulerAngles.x, -89f, 89f),
-            _viewTransform.localEulerAngles.y,
-            _viewTransform.localEulerAngles.z
-            );
-
+        // get and calculate necessary x rotation
+        _xRotation = _viewTransform.localRotation.eulerAngles.x;
+        _xRotation -= _lookInput.y * Time.deltaTime * _verticalLookSpeed;
+        // apply x rotation with clamping
+        if (_xRotation > 180f)
+        {
+            _xRotation -= 360f;
+        }
+        _xRotation = Mathf.Clamp(_xRotation, -89f, 89f);
+        _viewTransform.localRotation = Quaternion.AngleAxis(_xRotation, Vector3.right);
     }
 
     private void ManageMovement()
