@@ -1,9 +1,13 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
 /// A simple Player class
-/// holds controls, movement
+/// holds controls, movement, firing
+/// calls UI to update power bar
+/// once fired instantiates a cannon ball
+/// the more fire action is held down the more power is gained to launch the cannon ball
 /// </summary>
 public class Player : MonoBehaviour
 {
@@ -14,8 +18,15 @@ public class Player : MonoBehaviour
     [SerializeField] private Transform _viewTransform;
     [Header("Firing cannon balls")]
     [SerializeField] private GameObject _cannonBallPrefab;
+    [SerializeField] private Transform _firePort;
     [SerializeField] private float _fireRate = 0.5f;
-    [SerializeField] private float _cannonBallSpeed = 10f;
+    [SerializeField] private float _launchInitialPower = 10f; // initial speed for cannon ball
+    [SerializeField] private float _laucnPowerGainRate = 2f; // how much speed to gain per second as fire is held down
+    [SerializeField] private float _maxLaunchPower = 20f; // max speed for cannon ball
+    [SerializeField] private float _powerGainTimeStep = 0.25f; // how often to update the power bar
+    [Header("Simulating trajectory")]
+    [SerializeField] private SimulatedPhysicsScene _simulatedPhysicsScene;
+    [SerializeField] private float _simulatedLifeTime = 1f; // how long to simulate the cannon ball for
 
     private GameObject _spawnedObject;
     private CannonBall _cannonBall;
@@ -25,17 +36,25 @@ public class Player : MonoBehaviour
     private InputSystem _inputSystem;
     private float _xRotation;
     private SimpleRateLimiter _rateLimiter;
+    private float _launchPowerValue;
+    private float _powerRateValue;
+    private float _fireStartTime;
+    private bool _fireStarted;
+    private IEnumerator _powerGainRoutine;
 
     private void Start()
     {
         _inputSystem = InputControls.Instance.Input;
         _rateLimiter.DropTime = _fireRate + Time.time;
-        _inputSystem.Player.Fire.performed += Fire;
+        _inputSystem.Player.Fire.started += FireStarted;
+        _inputSystem.Player.Fire.canceled += FireCanceled;
+        _powerGainRoutine = LaunchPowerGainRoutine();
     }
 
     private void OnDestroy()
     {
-        _inputSystem.Player.Fire.performed -= Fire;
+        _inputSystem.Player.Fire.performed -= FireStarted;
+        _inputSystem.Player.Fire.canceled -= FireCanceled;
     }
 
     private void Update()
@@ -44,6 +63,7 @@ public class Player : MonoBehaviour
         ManageMovement();
     }
 
+    # region Look and Movement
     private void ManageLook()
     {
         // get look input
@@ -68,20 +88,57 @@ public class Player : MonoBehaviour
         _moveDirection = new Vector3(_movementInput.x, 0, _movementInput.y) * _moveSpeed * Time.deltaTime;
         transform.position += transform.TransformDirection(_moveDirection);
     }
+    #endregion
 
-    private void Fire(InputAction.CallbackContext context)
+    #region Firing
+    private void FireStarted(InputAction.CallbackContext context)
     {
         if (!enabled) return;
         if (_rateLimiter.IsReady(Time.time))
         {
-            _spawnedObject = Instantiate(_cannonBallPrefab, _viewTransform.position, _viewTransform.rotation);
-            if (_spawnedObject.TryGetComponent<CannonBall>(out _cannonBall))
-            {
-                _cannonBall.Fire(_viewTransform.forward, _cannonBallSpeed);
-            }
+            _fireStarted = true;
+            _fireStartTime = Time.time;
             _rateLimiter.SetNewRate(Time.time, _fireRate);
+            StartCoroutine(_powerGainRoutine);
         }
     }
+
+    private void FireCanceled(InputAction.CallbackContext obj)
+    {
+        if (!enabled) return;
+        if(_fireStarted)
+        {
+            _fireStarted = false;
+            StopCoroutine(_powerGainRoutine);
+            FireCannonBall(_launchPowerValue);
+            UIManager.Instance.UpdatePowerBar(0f);
+            _launchPowerValue = _launchInitialPower;
+        }
+    }
+
+    private IEnumerator LaunchPowerGainRoutine()
+    {
+        while (_fireStarted)
+        {
+            _launchPowerValue = Mathf.Clamp(_launchPowerValue + _laucnPowerGainRate * (Time.time - _fireStartTime), _launchInitialPower, _maxLaunchPower);
+            _powerRateValue = (_launchPowerValue - _launchInitialPower) / (_maxLaunchPower - _launchInitialPower);
+            _simulatedPhysicsScene.SimulatePhysics(_cannonBallPrefab, _firePort.position, _launchPowerValue * _firePort.forward, _simulatedLifeTime);
+            UIManager.Instance.UpdatePowerBar(_powerRateValue);
+            _fireStartTime = Time.time;
+            yield return new WaitForSeconds(_powerGainTimeStep);
+        }
+    }
+
+    private void FireCannonBall(float power)
+    {
+        _spawnedObject = Instantiate(_cannonBallPrefab, _firePort.position, _firePort.rotation);
+        if (_spawnedObject.TryGetComponent<CannonBall>(out _cannonBall))
+        {
+            _cannonBall.Fire(_firePort.forward, power);
+        }
+    }
+
+    #endregion
 }
 
 /// <summary>
