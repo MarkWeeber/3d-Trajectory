@@ -1,6 +1,4 @@
 ﻿using UnityEngine;
-using Cinemachine;
-using static UnityEditor.PlayerSettings;
 
 /// <summary>
 /// A simple class to control focus during the play mode

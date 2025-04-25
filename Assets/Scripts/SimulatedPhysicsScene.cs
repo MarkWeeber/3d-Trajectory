@@ -11,6 +11,7 @@ public class SimulatedPhysicsScene : MonoBehaviour
     private Scene _simulatedScene;
     private PhysicsScene _physicsScene;
     private GameObject _instantiatedObject;
+    private GameObject _simulatedObject;
     private Renderer _objectRenderer;
     private CannonBall _cannonBall;
 
@@ -37,26 +38,30 @@ public class SimulatedPhysicsScene : MonoBehaviour
         }
     }
 
-    public void SimulatePhysics(GameObject cannonBallPrefab, Vector3 position, Vector3 velocity, float lifeTime)
+    public void SimulatePhysics(GameObject cannonBallPrefab, Vector3 position, Vector3 velocity)
     {
-        _instantiatedObject = Instantiate(cannonBallPrefab, position, Quaternion.identity);
-        SceneManager.MoveGameObjectToScene(_instantiatedObject, _simulatedScene);
-        _cannonBall = _instantiatedObject.GetComponent<CannonBall>();
+        _simulatedObject = Instantiate(cannonBallPrefab, position, Quaternion.identity);
+        SceneManager.MoveGameObjectToScene(_simulatedObject, _simulatedScene);
+        _cannonBall = _simulatedObject.GetComponent<CannonBall>();
         _cannonBall.Fire(velocity);
-        //_cannonBall.DisableRenderer();
-        Destroy(_instantiatedObject, lifeTime);
+        _cannonBall.DisableRenderer();
         if (_lineRenderer != null)
         {
             _lineRenderer.positionCount = _maxPhysicsSimulations;
             _lineRenderer.SetPosition(0, position);
             for (int i = 1; i < _maxPhysicsSimulations; i++)
             {
-                Vector3 newPosition = position + velocity * Time.fixedDeltaTime * i;
-                _lineRenderer.SetPosition(i, newPosition);
-                _physicsScene.Simulate(Time.fixedDeltaTime);
+                _physicsScene.Simulate(Time.fixedDeltaTime * 3f);
+                _lineRenderer.SetPosition(i, _simulatedObject.transform.position);
+                
             }
         }
-        //Destroy(_instantiatedObject);
+        Destroy(_simulatedObject);
+    }
+
+    public void ClearLineRenderer()
+    {
+        _lineRenderer.positionCount = 0;
     }
 
 }

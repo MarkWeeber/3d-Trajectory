@@ -23,10 +23,8 @@ public class Player : MonoBehaviour
     [SerializeField] private float _launchInitialPower = 10f; // initial speed for cannon ball
     [SerializeField] private float _laucnPowerGainRate = 2f; // how much speed to gain per second as fire is held down
     [SerializeField] private float _maxLaunchPower = 20f; // max speed for cannon ball
-    [SerializeField] private float _powerGainTimeStep = 0.25f; // how often to update the power bar
     [Header("Simulating trajectory")]
     [SerializeField] private SimulatedPhysicsScene _simulatedPhysicsScene;
-    [SerializeField] private float _simulatedLifeTime = 1f; // how long to simulate the cannon ball for
 
     private GameObject _spawnedObject;
     private CannonBall _cannonBall;
@@ -47,14 +45,14 @@ public class Player : MonoBehaviour
         _inputSystem = InputControls.Instance.Input;
         _rateLimiter.DropTime = _fireRate + Time.time;
         _inputSystem.Player.Fire.started += FireStarted;
-        _inputSystem.Player.Fire.canceled += FireCanceled;
+        _inputSystem.Player.Fire.canceled += FireFinished;
         _powerGainRoutine = LaunchPowerGainRoutine();
     }
 
     private void OnDestroy()
     {
         _inputSystem.Player.Fire.performed -= FireStarted;
-        _inputSystem.Player.Fire.canceled -= FireCanceled;
+        _inputSystem.Player.Fire.canceled -= FireFinished;
     }
 
     private void Update()
@@ -91,6 +89,7 @@ public class Player : MonoBehaviour
     #endregion
 
     #region Firing
+    // once player presses fire button a coroutine to measure the time starts
     private void FireStarted(InputAction.CallbackContext context)
     {
         if (!enabled) return;
@@ -103,7 +102,8 @@ public class Player : MonoBehaviour
         }
     }
 
-    private void FireCanceled(InputAction.CallbackContext obj)
+    // when player releases fire button a cannon ball is instantiated
+    private void FireFinished(InputAction.CallbackContext obj)
     {
         if (!enabled) return;
         if(_fireStarted)
@@ -111,21 +111,24 @@ public class Player : MonoBehaviour
             _fireStarted = false;
             StopCoroutine(_powerGainRoutine);
             FireCannonBall(_launchPowerValue);
+            _simulatedPhysicsScene.ClearLineRenderer();
             UIManager.Instance.UpdatePowerBar(0f);
             _launchPowerValue = _launchInitialPower;
         }
     }
 
+    // a coroutine to measure the power of cannon ball launch
+    // calls to SimulatedPhysicsScene to simulate trajectory
     private IEnumerator LaunchPowerGainRoutine()
     {
         while (_fireStarted)
         {
             _launchPowerValue = Mathf.Clamp(_launchPowerValue + _laucnPowerGainRate * (Time.time - _fireStartTime), _launchInitialPower, _maxLaunchPower);
             _powerRateValue = (_launchPowerValue - _launchInitialPower) / (_maxLaunchPower - _launchInitialPower);
-            _simulatedPhysicsScene.SimulatePhysics(_cannonBallPrefab, _firePort.position, _launchPowerValue * _firePort.forward, _simulatedLifeTime);
+            _simulatedPhysicsScene.SimulatePhysics(_cannonBallPrefab, _firePort.position, _launchPowerValue * _firePort.forward);
             UIManager.Instance.UpdatePowerBar(_powerRateValue);
             _fireStartTime = Time.time;
-            yield return new WaitForSeconds(_powerGainTimeStep);
+            yield return new WaitForFixedUpdate();
         }
     }
 
